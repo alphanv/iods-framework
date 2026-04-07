@@ -1,0 +1,27 @@
+# Tier 2: Partially feasible — + vocalizations + ecology
+data:
+  modalities: [dna, image, audio]
+  level: species
+  sources:
+    dna: genbank
+    image: inaturalist
+    audio: xenocanto
+    interactions: globi
+  min_species: 5000
+
+model:
+  dna_dim: 512
+  img_dim: 512
+  audio_dim: 256
+  latent_dim: 512
+
+training:
+  phase2_epochs: 200
+  phase3_epochs: 400
+
+validation:
+  phylo_stratification: genus
+
+targets:
+  inverse_top5: 0.70
+  context_delta: 0.08

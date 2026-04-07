@@ -1,0 +1,38 @@
+# Tier 1: Currently feasible — genome + images, species-level
+data:
+  modalities: [dna, image]
+  level: species
+  sources:
+    dna: genbank
+    image: inaturalist
+  min_species: 1000
+  taxonomy_ref: ncbi
+  quality_filter: research_grade
+
+model:
+  dna_dim: 512
+  img_dim: 512
+  latent_dim: 512
+  context_dim: 32
+
+training:
+  phase1_epochs: 50
+  phase2_epochs: 100
+  phase3_epochs: 200
+  modality_dropout: 0.2
+  ema_decay: 0.99
+  batch_size: 256
+  lr: 1e-4
+
+validation:
+  phylo_stratification: family  # hold out entire families
+  null_models: [BM, OU, EB]
+  primary_outcome: inverse_retrieval
+  alpha: 0.05
+  kappa_values: [1.5, 2.0, 2.5, 3.0]
+
+targets:
+  inverse_top5: 0.60
+  forward_r2: 0.40
+  context_delta: 0.05
+  symbiotic_delta: 0.03
