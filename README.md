@@ -4,7 +4,7 @@
 
 Reference implementation for:
 
-> Vardarlı, A. (2026). "From Theory to Test: Formalizing Life-Specific Data Variables and Bidirectional Translation Protocols for Intra-Organismal Data Symbiosis." *Theory in Biosciences*.
+> Vardarlı, A. (2026). "From Theory to Test: Formalizing Life-Specific Data Variables and Bidirectional Translation Protocols for Intra-Organismal Data Symbiosis." *Submitted to Theory in Biosciences*.
 
 ## Overview
 
@@ -43,7 +43,7 @@ Input modalities (whatever is available per species)
 ## Installation
 
 ```bash
-git clone [INSERT_GITHUB_URL_HERE]
+git clone https://github.com/alphanv/iods-framework
 cd iods-framework
 pip install -e .
 ```
