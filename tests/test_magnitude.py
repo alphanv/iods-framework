@@ -1,32 +1,142 @@
-"""Magnitude function identifiability diagnostics — Section 2.6."""
+"""Tests for the magnitude function (formula F1)."""
+
+import pytest
 import torch
-from src.magnitude.magnitude import MagnitudeFunction
 
-def test_sigmoid_bounds():
-    mag = MagnitudeFunction(n_modalities=5, context_dim=96)
-    ctx = torch.randn(16, 96)
-    m = mag(ctx)
-    assert (m > 0).all() and (m < 1).all(), "Magnitudes must be in (0,1)"
+from iods.magnitude import (
+    ContextEmbedding, MagnitudeFunction, MagnitudeFunctionSoftmax, apply_magnitude,
+)
 
-def test_renormalization():
-    mag = MagnitudeFunction(n_modalities=3, context_dim=96)
-    ctx = torch.randn(4, 96)
-    m = mag(ctx)
-    presence = torch.tensor([[1,1,0],[1,0,1],[0,1,1],[1,1,1]]).float()
-    normed = mag.renormalize(m, presence)
-    sums = normed.sum(dim=-1)
-    assert torch.allclose(sums, torch.ones_like(sums), atol=1e-5)
 
-def test_ablation_uniform():
-    """Diagnostic 1: compare learned vs uniform magnitudes."""
-    mag = MagnitudeFunction(n_modalities=5, context_dim=96)
-    ctx = torch.randn(32, 96)
-    learned = mag(ctx)
-    uniform = torch.ones_like(learned) * 0.5
-    assert not torch.allclose(learned, uniform, atol=0.01), "Untrained magnitudes should vary"
+@pytest.fixture
+def context_embedding():
+    return ContextEmbedding(
+        n_env_categories=4, n_phase_categories=4,
+        d_time=32, d_env=16, d_phase=16,
+    )
 
-if __name__ == "__main__":
-    test_sigmoid_bounds()
-    test_renormalization()
-    test_ablation_uniform()
-    print("All magnitude tests passed.")
+
+@pytest.fixture
+def magnitude(context_embedding):
+    return MagnitudeFunction(n_modalities=7, context_embedding=context_embedding)
+
+
+def _make_context(B=8):
+    t = torch.linspace(0.0, 10.0, B)
+    e = torch.randint(0, 4, (B,))
+    s = torch.randint(0, 4, (B,))
+    return t, e, s
+
+
+def test_magnitude_in_unit_interval(magnitude):
+    t, e, s = _make_context(B=16)
+    m = magnitude(t, e, s)
+    assert m.shape == (16, 7)
+    assert torch.all(m > 0)
+    assert torch.all(m < 1)
+
+
+def test_magnitude_with_zero_context(context_embedding):
+    mag = MagnitudeFunction(n_modalities=4, context_embedding=context_embedding)
+    with torch.no_grad():
+        mag.w.zero_()
+        mag.b.zero_()
+    t, e, s = _make_context(B=4)
+    m = mag(t, e, s)
+    assert torch.allclose(m, torch.full_like(m, 0.5), atol=1e-6)
+
+
+def test_sigmoid_gradient_form(context_embedding):
+    mag = MagnitudeFunction(n_modalities=3, context_embedding=context_embedding)
+    t = torch.tensor([1.0, 2.0, 3.0])
+    e = torch.tensor([0, 1, 2])
+    s = torch.tensor([2, 1, 0])
+    m = mag(t, e, s)
+    c = mag.context_embedding(t, e, s)
+    logits = c @ mag.w.t() + mag.b
+    expected = torch.sigmoid(logits)
+    assert torch.allclose(m, expected, atol=1e-6)
+    d = expected * (1 - expected)
+    assert torch.all(d > 0)
+    assert torch.all(d <= 0.25 + 1e-6)
+
+
+def test_renormalize_for_presence_zeros_absent(magnitude):
+    t, e, s = _make_context(B=4)
+    m = magnitude(t, e, s)
+    presence = torch.tensor(
+        [[1, 1, 0, 1, 1, 1, 0],
+         [1, 0, 0, 1, 1, 1, 1],
+         [1, 1, 1, 1, 0, 0, 1],
+         [0, 1, 1, 0, 1, 1, 1]],
+        dtype=torch.float32,
+    )
+    m_renorm = magnitude.renormalize_for_presence(m, presence)
+    assert torch.all((m_renorm * (1 - presence)) == 0)
+    assert torch.all((m_renorm * presence)[presence == 1] > 0)
+
+
+def test_renormalize_preserves_sum(magnitude):
+    t, e, s = _make_context(B=4)
+    m = magnitude(t, e, s)
+    presence = torch.tensor(
+        [[1, 1, 0, 1, 1, 1, 0],
+         [1, 0, 0, 1, 1, 1, 1],
+         [1, 1, 1, 1, 0, 0, 1],
+         [0, 1, 1, 0, 1, 1, 1]],
+        dtype=torch.float32,
+    )
+    sum_before = m.sum(dim=-1)
+    m_renorm = magnitude.renormalize_for_presence(m, presence)
+    sum_after = m_renorm.sum(dim=-1)
+    assert torch.allclose(sum_before, sum_after, atol=1e-5)
+
+
+def test_renormalize_all_present_is_identity(magnitude):
+    t, e, s = _make_context(B=4)
+    m = magnitude(t, e, s)
+    presence = torch.ones_like(m)
+    m_renorm = magnitude.renormalize_for_presence(m, presence)
+    assert torch.allclose(m_renorm, m, atol=1e-6)
+
+
+def test_apply_magnitude_shapes():
+    B, M, D = 4, 7, 16
+    emb = torch.randn(B, M, D)
+    mag = torch.rand(B, M)
+    out = apply_magnitude(emb, mag)
+    assert out.shape == (B, M, D)
+
+
+def test_apply_magnitude_scaling():
+    B, M, D = 2, 3, 4
+    emb = torch.ones(B, M, D)
+    mag = torch.tensor([[0.5, 1.0, 0.0], [1.0, 0.0, 0.5]])
+    out = apply_magnitude(emb, mag)
+    expected = torch.zeros_like(emb)
+    expected[0, 0, :] = 0.5; expected[0, 1, :] = 1.0; expected[0, 2, :] = 0.0
+    expected[1, 0, :] = 1.0; expected[1, 1, :] = 0.0; expected[1, 2, :] = 0.5
+    assert torch.allclose(out, expected)
+
+
+def test_apply_magnitude_shape_validation():
+    with pytest.raises(ValueError):
+        apply_magnitude(torch.randn(4, 7), torch.randn(4, 7))
+    with pytest.raises(ValueError):
+        apply_magnitude(torch.randn(4, 7, 16), torch.randn(4, 8))
+
+
+def test_softmax_variant_sums_to_one(context_embedding):
+    mag = MagnitudeFunctionSoftmax(n_modalities=5, context_embedding=context_embedding)
+    t, e, s = _make_context(B=4)
+    m = mag(t, e, s)
+    sums = m.sum(dim=-1)
+    assert torch.allclose(sums, torch.ones_like(sums), atol=1e-6)
+
+
+def test_magnitude_deterministic(magnitude):
+    t, e, s = _make_context(B=4)
+    magnitude.eval()
+    m1 = magnitude(t, e, s)
+    m2 = magnitude(t, e, s)
+    assert torch.allclose(m1, m2)
