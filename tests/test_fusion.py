@@ -47,6 +47,7 @@ def test_fusion_handles_missing_modalities():
 
 
 def test_fusion_gradient_flows():
+    torch.manual_seed(0)
     fusion = CrossAttentionFusion(d_z=32, n_modalities=3, n_heads=2, n_layers=1)
     embeddings = torch.randn(4, 3, 32, requires_grad=True)
     magnitudes = torch.rand(4, 3)
