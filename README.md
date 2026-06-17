@@ -6,7 +6,7 @@ Reference implementation for:
 
 > Vardarlı, A. (2026). "From Theory to Test: Formalizing Life-Specific Data Variables and Bidirectional Translation Protocols for Intra-Organismal Data Symbiosis." *Submitted to Theory in Biosciences.*
 >
-> Vardarlı, A. (2026). "Life-Specific Data and Intra-Organismal Data Symbiosis: A Biosemiotic Framework for Post-Genomic Biology." *Submitted to Biosemiotics.*
+> Vardarlı, A. (2026). "Life-Specific Data and Intra-Organismal Data Symbiosis: A Biosemiotic Framework for Post-Genomic Biology." *Submitted to Biosemiotics.REJECTED 0n 17/06/2026*
 
 ## Overview
 
@@ -175,7 +175,7 @@ See `docs/development_roadmap.md` for the full plan.
 
 ## License
 
-MIT License. See [LICENSE](LICENSE).
+GNU Affero General Public License v3.0. See [LICENSE](LICENSE).
 
 ## Author
 
